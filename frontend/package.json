@@ -1,0 +1,1 @@
+{"name":"project-ledger","private":true,"version":"0.1.0","type":"module","scripts":{"dev":"vite --host 0.0.0.0","build":"tsc --noEmit && vite build","check":"tsc --noEmit"},"dependencies":{"@vitejs/plugin-vue":"^5.2.1","china-geojson":"^1.0.0","echarts":"^6.1.0","typescript":"^5.7.2","vite":"^6.0.0","vue":"^3.5.13","vue-tsc":"^2.2.0","xlsx":"^0.18.5"}}

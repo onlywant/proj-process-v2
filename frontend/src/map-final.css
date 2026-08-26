@@ -1,0 +1,105 @@
+.map-overlay{padding:8px 16px!important}.map-header{max-width:1040px!important;margin:0 auto!important}.map-scene{max-width:1040px!important;margin:6px auto 0!important;grid-template-columns:minmax(0,1fr) 240px!important;gap:14px!important}.map-surface.real-map{background:#123b42;border-radius:2px}.real-map>svg{width:88%;height:88%}.province-labels,.taiwan-inset{display:none!important}.taiwan-region{cursor:pointer}.taiwan-region path{fill:#5faba1;stroke:#5faba1;stroke-width:7;vector-effect:non-scaling-stroke}.taiwan-region:hover path{fill:#e0bd68;stroke:#e0bd68}.map-summary{padding:22px!important}@media(max-width:800px){.map-overlay{padding:6px 8px!important}.map-header{max-width:none!important}.map-scene{max-width:none!important;grid-template-columns:minmax(0,1fr) 138px!important;gap:7px!important}.real-map>svg{width:92%;height:92%}.map-summary{padding:12px!important}}
+.map-surface.real-map{padding:0!important;display:block!important;overflow:hidden}.real-map{min-width:0}.real-map canvas{display:block}.map-summary{position:relative;z-index:1}
+
+/* National panorama: project presence is encoded by map brightness; risk is encoded by red borders. */
+.app-shell:has(.map-overlay){background:#07151d}
+.map-overlay{background:#07151d!important;padding:18px 38px 20px!important;color:#edf8f5;overflow:hidden!important;display:flex;flex-direction:column}
+.panorama-topbar{height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:space-between;max-width:1560px;width:100%;margin:0 auto}
+.panorama-topbar h1{font-size:22px;letter-spacing:.02em;margin:2px 0 0}
+.panorama-meta{display:flex;align-items:center;gap:16px;color:#85a5ab;font-size:12px}
+.panorama-meta button{border:1px solid #31525c!important;color:#d8eee9!important;padding:7px 13px!important;background:#102b35!important}
+.panorama-kpis{max-width:1560px;width:100%;margin:10px auto 12px;display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:8px;flex:0 0 68px}
+.panorama-kpi{min-height:68px;padding:10px 16px;background:#0d242d;border:1px solid #1c414c;position:relative;overflow:hidden}
+.panorama-kpi:after{content:"";position:absolute;right:-18px;bottom:-28px;width:90px;height:90px;border:1px solid #2c6970;border-radius:50%;opacity:.45}
+.panorama-kpi small,.panorama-kpi span{display:block;color:#83a6a9;font-size:11px}.panorama-kpi strong{display:block;color:#f3fbf7;font-size:27px;line-height:1.1;margin:4px 0 1px}.panorama-kpi:first-child strong{font-size:32px;color:#62d4bd}.panorama-kpi em{font-style:normal;font-size:14px;color:#75979c;margin-left:3px}.panorama-kpi.risk{border-color:#70413f}.panorama-kpi.risk strong{color:#ff8578}
+.map-scene{max-width:1560px!important;width:100%;height:auto!important;min-height:0;flex:1 1 auto;grid-template-columns:minmax(0,1.65fr) minmax(330px,.85fr)!important;gap:12px!important;margin:0 auto!important}
+.map-surface.real-map{background:#0b222c!important;border:1px solid #1d4c57!important;box-shadow:inset 0 0 80px #0a1820!important;padding:0!important}
+.map-summary{background:#0d252f!important;border:1px solid #204953!important;padding:22px!important}
+.map-summary h2{font-size:21px!important;margin:8px 0 28px!important}.map-summary strong{color:#62d4bd!important;font-size:56px!important}.map-summary>span{color:#89a9ab!important}.map-summary p{color:#a7c3c0!important;line-height:1.9!important}
+.province-status{display:grid;grid-template-columns:auto 1fr;gap:7px 10px;margin:24px 0;border-top:1px solid #234a53;border-bottom:1px solid #234a53;padding:14px 0}.province-status b{color:#ff8578;font-size:18px}.province-status b:nth-of-type(2){color:#62d4bd}.province-status span{align-self:center;color:#8eabad;font-size:12px}
+.map-link{background:#b9f1df!important;color:#09232c!important;border:0!important;font-weight:700;padding:9px 12px!important}.map-legend{margin-top:auto;padding-top:18px;border-top:1px solid #234a53;display:grid;gap:9px;color:#8eabad;font-size:11px}.map-legend span{display:flex;align-items:center;gap:7px}.map-legend i{display:inline-block;width:10px;height:10px}.legend-project{background:#4faea6}.legend-risk{border:2px solid #ff756b}
+ .panorama-bottom{max-width:1560px;width:100%;margin:10px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:0 0 106px}.ranking-panel{background:#0d242d;border:1px solid #1c414c;padding:10px 16px}.panel-heading{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid #1c414c;padding-bottom:6px;margin-bottom:4px}.panel-heading span{font-size:10px;letter-spacing:1.2px;color:#5bbcae}.panel-heading b{font-size:13px;color:#d7ece8}.ranking-row{display:grid;grid-template-columns:30px 74px minmax(50px,1fr) 42px;align-items:center;gap:8px;width:100%;min-height:20px;color:#c8dfdc;text-align:left}.ranking-row i{font-style:normal;color:#718f95;font-size:11px}.ranking-row>span{font-size:12px}.ranking-row>strong{font-size:12px;text-align:right;color:#e6f7f1}.ranking-bar{height:5px;background:#173740;overflow:hidden}.ranking-bar b{display:block;height:100%;background:#4faea6}.issue-ranking .ranking-bar b{background:#d96b64}.issue-ranking .ranking-row>strong{color:#ff897e}.ranking-row:hover{background:#153741}.ranking-empty{color:#769196;font-size:12px;margin:8px 0}
+@media(max-width:800px){.map-overlay{inset:115px 0 0!important;padding:12px!important}.panorama-topbar{height:30px;flex-basis:30px}.panorama-topbar h1{font-size:20px}.panorama-meta>span{display:none}.panorama-kpis{grid-template-columns:repeat(2,1fr);gap:6px;margin:8px 0;flex-basis:76px}.panorama-kpi{min-height:0;padding:9px 11px}.panorama-kpi strong,.panorama-kpi:first-child strong{font-size:24px;margin-top:3px}.map-scene{grid-template-columns:minmax(0,1fr) 142px!important;gap:7px!important}.map-summary{padding:12px!important}.map-summary h2{font-size:16px!important;margin:6px 0 14px!important}.map-summary strong{font-size:35px!important}.province-status{margin:14px 0;padding:9px 0;gap:4px 7px}.map-legend{font-size:9px;padding-top:10px;gap:6px}.panorama-bottom{grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;flex-basis:102px}.ranking-panel{padding:8px 10px}.ranking-row{grid-template-columns:20px 48px minmax(20px,1fr) 30px;gap:4px;min-height:20px}.ranking-row>span,.ranking-row>strong{font-size:10px}}
+
+/* Keep the dashboard inside one viewport and keep the overview content compact. */
+.map-overlay{height:calc(100vh - 72px)!important;min-height:0!important}
+.map-scene{min-height:0!important;overflow:hidden!important}
+.map-scene>.map-surface,.map-scene>.map-summary{height:100%!important;min-height:0!important}
+.map-summary{overflow:hidden!important}
+.map-summary p{margin-top:18px!important;margin-bottom:0!important}
+.map-legend{margin-top:18px!important}
+@media(max-width:800px){.map-overlay{height:calc(100vh - 115px)!important}.map-summary{overflow:hidden!important}.map-legend{margin-top:12px!important}}
+
+/* Province details use a compact information grid instead of a single vertical column. */
+.province-summary-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;width:100%;border-bottom:1px solid #234a53;padding-bottom:13px}
+.province-summary-head h2{margin:5px 0 0!important;font-size:21px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
+.summary-state{border:1px solid #32616a;color:#8cc3bb!important;padding:4px 7px;font-size:10px;white-space:nowrap}
+.province-total{display:flex;align-items:baseline;gap:9px;padding:17px 0 13px;width:100%}.province-total strong{font-size:52px!important;line-height:1;color:#62d4bd!important}.province-total span{color:#9bb6b6!important;font-size:12px}.province-total em{margin-left:auto;color:#5fc3ae;font-size:11px;font-style:normal}
+.province-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}.metric{background:#102e38;border:1px solid #1d4b55;padding:10px 11px;min-width:0}.metric small,.metric span{display:block;color:#8ba9aa;font-size:10px}.metric b{display:block;color:#e4f6f1;font-size:22px;line-height:1.15;margin:5px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric.risk-metric{border-color:#644143}.metric.risk-metric b{color:#ff8278}.metric.healthy-metric b{color:#62d4bd}.summary-hint{width:100%;margin:15px 0 0!important;padding:10px 11px;background:#102e38;color:#9bb6b6!important;font-size:11px;line-height:1.6!important}
+.map-summary>.map-link{align-self:stretch;margin-top:13px!important;text-align:center}
+.map-summary>.map-link{display:block!important;visibility:visible!important;opacity:1!important;flex-shrink:0!important}
+.map-summary>.map-legend{width:100%;margin-top:auto!important}
+@media(max-width:800px){.province-summary-head{padding-bottom:9px}.province-summary-head h2{font-size:16px!important;max-width:94px}.summary-state{font-size:9px;padding:3px 5px}.province-total{padding:11px 0 9px;gap:5px}.province-total strong{font-size:34px!important}.province-total span,.province-total em{font-size:9px}.province-total em{margin-left:auto}.province-metrics{gap:5px}.metric{padding:7px 8px}.metric b{font-size:17px;margin:3px 0}.metric small,.metric span{font-size:9px}.summary-hint{margin-top:9px!important;padding:7px 8px;font-size:9px}.map-summary>.map-link{margin-top:9px!important}.map-summary>.map-legend{font-size:8px}}
+
+/* The province panel only shows local context; it does not repeat the global KPI strip. */
+.map-summary{align-items:stretch!important;justify-content:flex-start!important;padding:18px!important;gap:0!important}
+.province-summary-head,.province-total,.province-metrics,.summary-hint,.map-summary>.map-link{flex:0 0 auto}
+.province-total{min-height:72px}.province-metrics{min-height:0}
+.province-metrics .metric{min-height:72px}
+.summary-hint{box-sizing:border-box}
+@media(max-width:800px){.map-summary{padding:11px!important}.province-total{min-height:54px}.province-metrics .metric{min-height:58px}}
+
+@media(max-width:800px){
+  .map-overlay{inset:0 0 60px!important;height:auto!important;padding:8px 10px!important;overflow:auto!important}
+  .panorama-topbar,.panorama-kpis{display:none!important}
+  .map-scene{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;height:auto!important;min-height:0!important;margin:0!important;gap:8px!important}
+  .map-summary{order:1!important;width:100%!important;height:auto!important;min-height:0!important;overflow:visible!important;padding:14px!important}
+  .map-surface.real-map{order:2!important;width:100%!important;height:50vh!important;min-height:280px!important;flex:none!important}
+  .panorama-bottom{display:none!important}
+}
+
+@media(max-width:800px){
+  .map-summary{font-size:13px!important;line-height:1.45!important}
+  .province-summary-head{padding-bottom:12px!important;gap:8px!important}
+  .province-summary-head .section-kicker{font-size:10px!important;line-height:1.2!important}
+  .province-summary-head h2{font-size:20px!important;line-height:1.25!important;max-width:none!important;margin:5px 0 0!important}
+  .summary-state{font-size:11px!important;line-height:1.2!important;padding:5px 8px!important}
+  .province-total{padding:14px 0 12px!important;min-height:0!important;gap:8px!important}
+  .province-total strong{font-size:42px!important;line-height:1!important}
+  .province-total span{font-size:13px!important}
+  .province-total em{font-size:12px!important;line-height:1.3!important}
+  .province-metrics{gap:8px!important}
+  .province-metrics .metric{min-height:76px!important;padding:10px!important}
+  .metric small,.metric span{font-size:11px!important;line-height:1.35!important}
+  .metric b{font-size:20px!important;line-height:1.2!important;margin:5px 0 3px!important}
+  .summary-hint{font-size:12px!important;line-height:1.5!important;margin-top:12px!important;padding:9px 10px!important}
+  .map-summary>.map-link{font-size:13px!important;padding:10px 12px!important;margin-top:12px!important}
+  .map-summary{box-sizing:border-box;max-width:100%;overflow:hidden!important}
+  .province-summary-head h2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .province-total{min-width:0;flex-wrap:wrap;align-items:baseline}
+  .province-total em{max-width:48%;margin-left:auto;white-space:normal;text-align:right;overflow-wrap:anywhere}
+  .province-metrics{min-width:0}
+  .province-metrics .metric{min-width:0;overflow:hidden}
+  .metric b,.metric span,.metric small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .summary-hint{overflow-wrap:anywhere;word-break:break-word}
+  .map-summary{display:flex!important;box-sizing:border-box!important;overflow:hidden!important;padding:13px!important}
+  .map-summary>*{box-sizing:border-box!important;max-width:100%!important}
+  .province-summary-head,.province-total,.province-metrics,.summary-hint,.map-summary>.map-link{width:100%!important;max-width:100%!important}
+  .province-summary-head{padding-bottom:10px!important}
+  .province-summary-head .section-kicker{font-size:10px!important}
+  .province-summary-head h2{font-size:19px!important;margin-top:4px!important}
+  .summary-state{font-size:10px!important;padding:4px 7px!important}
+  .province-total{padding:12px 0 10px!important;gap:7px!important}
+  .province-total strong{font-size:38px!important}
+  .province-total span,.province-total em{font-size:11px!important}
+  .province-metrics{gap:7px!important}
+  .province-metrics .metric{min-height:68px!important;padding:9px!important}
+  .metric b{font-size:19px!important;line-height:1.15!important;margin:4px 0 2px!important}
+  .metric span,.metric small{font-size:10px!important;line-height:1.3!important}
+  .summary-hint{font-size:11px!important;line-height:1.4!important;margin-top:10px!important;padding:8px 9px!important}
+  .map-summary>.map-link{font-size:12px!important;padding:8px 10px!important;margin-top:10px!important}
+  .province-summary-head h2{white-space:normal!important;overflow-wrap:anywhere!important;word-break:break-word!important}
+  .province-total em{white-space:normal!important;overflow-wrap:anywhere!important;word-break:break-word!important}
+  .metric b,.metric span,.metric small{white-space:normal!important;overflow-wrap:anywhere!important;word-break:break-word!important;text-overflow:clip!important}
+  .map-summary>.map-link{white-space:normal!important;overflow-wrap:anywhere!important}
+}
