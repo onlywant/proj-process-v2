@@ -214,6 +214,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/projects", s.create)
 	s.mux.HandleFunc("GET /api/projects/summary", s.summary)
 	s.mux.HandleFunc("GET /api/projects/{id}", s.detail)
+	s.mux.HandleFunc("DELETE /api/projects/{id}", s.deleteProject)
 	s.mux.HandleFunc("PUT /api/projects/{id}", s.edit)
 	s.mux.HandleFunc("POST /api/projects/{id}/progress", s.progress)
 	// Keep compatibility with clients that used PUT for progress updates.
@@ -360,8 +361,8 @@ func (s *Server) updateConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "请求格式错误")
 		return
 	}
-	if len(d.Provinces) == 0 || len(d.Stages) == 0 || len(d.HealthStatuses) == 0 || len(d.UpdateCycles) == 0 {
-		fail(w, 400, "省份、阶段、健康状态和更新周期不能为空")
+	if len(d.Provinces) == 0 || len(d.ProjectTypes) == 0 || len(d.Stages) == 0 || len(d.HealthStatuses) == 0 || len(d.UpdateCycles) == 0 {
+		fail(w, 400, "省份、项目类型、阶段、健康状态和更新周期不能为空")
 		return
 	}
 	if d.NearDays < 1 {
@@ -600,6 +601,43 @@ func (s *Server) clearProjects(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonOut(w, 200, map[string]any{"status": "cleared", "count": count, "operator": u.Name})
 }
+
+func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
+	u, ok := s.auth(r, "admin")
+	if !ok {
+		fail(w, 403, "仅管理员可以删除项目")
+		return
+	}
+	id := r.PathValue("id")
+	tx, err := s.db.Begin()
+	if err != nil {
+		fail(w, 500, "无法开始删除操作")
+		return
+	}
+	var count int
+	if err = tx.QueryRow("SELECT COUNT(*) FROM projects WHERE id=?", id).Scan(&count); err != nil || count == 0 {
+		tx.Rollback()
+		fail(w, 404, "项目不存在")
+		return
+	}
+	if _, err = tx.Exec("DELETE FROM histories WHERE project_id=?", id); err == nil {
+		_, err = tx.Exec("DELETE FROM audit_logs WHERE project_id=?", id)
+	}
+	if err == nil {
+		_, err = tx.Exec("DELETE FROM projects WHERE id=?", id)
+	}
+	if err != nil {
+		tx.Rollback()
+		fail(w, 500, "项目删除失败")
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		fail(w, 500, "项目删除失败")
+		return
+	}
+	jsonOut(w, 200, map[string]any{"status": "deleted", "id": id, "operator": u.Name})
+}
+
 func insertHistory(tx *sql.Tx, p Project, note string) error {
 	h := History{ProjectID: p.ID, Stage: p.Stage, Health: p.Health, Progress: p.Progress, ProblemTags: p.ProblemTags, ProblemDescription: p.ProblemDescription, NextPlan: p.NextPlan, Note: note, UpdatedAt: p.UpdatedAt, UpdatedBy: p.UpdatedBy}
 	b, _ := json.Marshal(h)
@@ -1190,7 +1228,7 @@ func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(204)
 			return

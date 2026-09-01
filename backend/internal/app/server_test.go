@@ -132,6 +132,32 @@ func TestPermissionsAndPassword(t *testing.T) {
 	}
 }
 
+func TestAdminCanConfigureProjectTypes(t *testing.T) {
+	s, err := New(t.TempDir()+"/app.db", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := loginToken(t, s, "admin", "admin123")
+	var config Dictionary
+	w := call(t, s, http.MethodPut, "/api/config", admin, Dictionary{
+		Provinces: []string{"江苏"}, ProjectTypes: []string{"专项项目", "常规项目"},
+		Stages: []string{"策划中"}, HealthStatuses: []string{"正常"},
+		UpdateCycles: []string{"每周"}, NearDays: 3,
+	})
+	if w.Code != 200 {
+		t.Fatalf("update config=%d %s", w.Code, w.Body)
+	}
+	w = call(t, s, http.MethodGet, "/api/dictionaries", admin, nil)
+	envelope(t, w, &config)
+	if len(config.ProjectTypes) != 2 || config.ProjectTypes[0] != "专项项目" {
+		t.Fatalf("project types not persisted: %#v", config.ProjectTypes)
+	}
+	invalid := Dictionary{Provinces: []string{"江苏"}, Stages: []string{"策划中"}, HealthStatuses: []string{"正常"}, UpdateCycles: []string{"每周"}}
+	if w := call(t, s, http.MethodPut, "/api/config", admin, invalid); w.Code != 400 {
+		t.Fatalf("empty project types accepted: %d", w.Code)
+	}
+}
+
 func TestDefaultEditorUsersAndAdminReset(t *testing.T) {
 	s, err := New(t.TempDir()+"/app.db", "")
 	if err != nil {
@@ -190,5 +216,32 @@ func TestAdminCanClearProjectsOnly(t *testing.T) {
 	}
 	if w := call(t, s, http.MethodGet, "/api/users", admin, nil); w.Code != 200 {
 		t.Fatalf("users removed with projects=%d", w.Code)
+	}
+}
+
+func TestAdminCanDeleteSingleProjectOnly(t *testing.T) {
+	s, err := New(t.TempDir()+"/app.db", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := loginToken(t, s, "admin", "admin123")
+	ordinary := loginToken(t, s, "yuquanqing", "yuquanqing")
+	w := call(t, s, http.MethodPost, "/api/projects", admin, Project{Province: "江苏", Name: "单项删除测试", ProjectYear: "2026", Health: "正常", Progress: "测试", UpdateCycle: "每周"})
+	if w.Code != 201 {
+		t.Fatalf("create=%d %s", w.Code, w.Body)
+	}
+	var p Project
+	envelope(t, w, &p)
+	if w := call(t, s, http.MethodDelete, "/api/projects/"+p.ID, ordinary, nil); w.Code != 403 {
+		t.Fatalf("ordinary delete=%d", w.Code)
+	}
+	if w := call(t, s, http.MethodDelete, "/api/projects/"+p.ID, admin, nil); w.Code != 200 {
+		t.Fatalf("admin delete=%d %s", w.Code, w.Body)
+	}
+	if w := call(t, s, http.MethodGet, "/api/projects/"+p.ID, admin, nil); w.Code != 404 {
+		t.Fatalf("deleted detail=%d", w.Code)
+	}
+	if w := call(t, s, http.MethodDelete, "/api/projects/"+p.ID, admin, nil); w.Code != 404 {
+		t.Fatalf("repeat delete=%d", w.Code)
 	}
 }
