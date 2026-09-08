@@ -920,6 +920,9 @@ func (s *Server) progress(w http.ResponseWriter, r *http.Request) {
 	p.NextPlan = in.NextPlan
 	p.UpdateCycle = in.UpdateCycle
 	p.CustomCycleDays = in.CustomCycleDays
+	p.TotalAmount = in.TotalAmount
+	p.ContractAmount = in.ContractAmount
+	p.SuccessDate = in.SuccessDate
 	p.UpdatedAt = time.Now().Format(time.RFC3339)
 	setNextUpdateAt(&p)
 	p.UpdatedBy = u.Name

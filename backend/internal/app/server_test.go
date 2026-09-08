@@ -106,6 +106,9 @@ func TestCoreProjectWorkflow(t *testing.T) {
 		t.Fatalf("number-disambiguated create=%d", w.Code)
 	}
 	p.Progress = "第二次记录"
+	p.TotalAmount = 120.5
+	p.ContractAmount = 45.25
+	p.SuccessDate = "2026-09-08"
 	p.Version = 1
 	w = call(t, s, http.MethodPut, "/api/projects/"+p.ID+"/progress", admin, p)
 	if w.Code != 200 {
@@ -117,7 +120,7 @@ func TestCoreProjectWorkflow(t *testing.T) {
 	}
 	w = call(t, s, http.MethodGet, "/api/projects/"+p.ID, admin, nil)
 	envelope(t, w, &d)
-	issue := map[string]any{"version": p.Version, "health": "有问题", "problemDescription": "需要协调", "problemTags": []string{"进度滞后"}, "progress": "问题进展", "stage": p.Stage, "updateCycle": p.UpdateCycle}
+	issue := map[string]any{"version": p.Version, "health": "有问题", "problemDescription": "需要协调", "problemTags": []string{"进度滞后"}, "progress": "问题进展", "stage": p.Stage, "updateCycle": p.UpdateCycle, "totalAmount": p.TotalAmount, "contractAmount": p.ContractAmount, "successDate": p.SuccessDate}
 	w = call(t, s, http.MethodPost, "/api/projects/"+p.ID+"/progress", admin, issue)
 	if w.Code != 200 {
 		t.Fatalf("issue progress=%d %s", w.Code, w.Body)
@@ -127,7 +130,7 @@ func TestCoreProjectWorkflow(t *testing.T) {
 	}
 	w = call(t, s, http.MethodGet, "/api/projects/"+p.ID, admin, nil)
 	envelope(t, w, &d)
-	if d.Project.Progress != "问题进展" || d.Project.Name != p.Name || d.Project.Source != p.Source {
+	if d.Project.Progress != "问题进展" || d.Project.Name != p.Name || d.Project.Source != p.Source || d.Project.TotalAmount != p.TotalAmount || d.Project.ContractAmount != p.ContractAmount || d.Project.SuccessDate != p.SuccessDate {
 		t.Fatalf("project after progress=%+v", d.Project)
 	}
 	importBody := map[string]any{"projects": []Project{{Province: "浙江", Name: "导入测试", ProjectYear: "2026", Health: "正常", Progress: "导入内容", UpdateCycle: "每周"}}}
