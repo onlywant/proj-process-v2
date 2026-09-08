@@ -26,6 +26,8 @@ const showUserForm = ref(false)
 const showPasswordForm = ref(false)
 const showAccountMenu = ref(false)
 const accountMenu = ref<HTMLElement | null>(null)
+const showStageMenu = ref(false)
+const stageMenu = ref<HTMLElement | null>(null)
 const showLedgerStats = ref(false)
 const showClearProjects = ref(false)
 const deleteTarget = ref<Project | null>(null)
@@ -40,7 +42,7 @@ const resetPassword = ref('')
 const formMode = ref<'new' | 'edit' | 'progress'>('new')
 const form = reactive<Project>({ province: '', name: '', projectYear: String(new Date().getFullYear()), stage: '', health: '', updateCycle: '', problemTags: [] })
 const note = ref('')
-const filters = reactive({ q: '', province: '', stage: '', health: '', type: '', specificType: '', expansionOwner: '', projectYear: '', successDateFrom: '', successDateTo: '', quick: '', sort: '', page: 1, pageSize: 1000 })
+const filters = reactive({ q: '', province: '', stage: [] as string[], health: '', type: '', specificType: '', expansionOwner: '', projectYear: '', successDateFrom: '', successDateTo: '', quick: '', sort: '', page: 1, pageSize: 1000 })
 const selectedProjectIds = ref<string[]>([])
 const showExportColumns = ref(false)
 const exportColumnKeys = ref<string[]>([])
@@ -54,6 +56,7 @@ const exportColumns = [
   ['problemTags', '问题标签'], ['progress', '当前进展'], ['problemDescription', '问题说明'],
   ['nextPlan', '下一步计划'], ['updateCycle', '更新周期']
 ] as const
+const exportProjectTypeOrder = ['政府项目', '省部级项目', '国网项目', '省公司科技项目']
 const defaultExportColumnKeys = exportColumns.map(([key]) => key)
 const ownerOptions = computed(() => users.value.filter(item => item.status !== '停用').map(item => item.name).filter(Boolean).sort((a, b) => a.localeCompare(b, 'zh-CN')))
 const formStageOptions = computed(() => [...new Set([...(dict.value.stages || []), form.stage].filter(Boolean))])
@@ -63,14 +66,29 @@ const sortDirection = ref<'asc' | 'desc'>('desc')
 const resizingColumn = ref(false)
 const columnWidths = reactive<Record<string, number>>({ selected: 42, province: 76, name: 280, projectYear: 72, type: 110, specificType: 150, stage: 100, health: 90, progress: 280, expansionOwner: 110, status: 110, updatedAt: 150 })
 const sortedProjects = computed(() => [...projects.value].sort((a, b) => { const key = sortKey.value; const av = key === 'status' ? status(a) : String(a[key] || ''); const bv = key === 'status' ? status(b) : String(b[key] || ''); const result = av.localeCompare(bv, 'zh-CN'); return sortDirection.value === 'asc' ? result : -result }))
-const ledgerStats = computed(() => { const groups = new Map<string, { type: string; count: number; totalAmount: number; contractAmount: number }>(); for (const project of projects.value) { const type = project.type || '未填写'; const group = groups.get(type) || { type, count: 0, totalAmount: 0, contractAmount: 0 }; group.count += 1; group.totalAmount += Number(project.totalAmount || 0); group.contractAmount += Number(project.contractAmount || 0); groups.set(type, group) } return [...groups.values()].sort((a, b) => b.count - a.count) })
-const ledgerTotalAmount = computed(() => projects.value.reduce((sum, project) => sum + Number(project.totalAmount || 0), 0))
-const ledgerContractAmount = computed(() => projects.value.reduce((sum, project) => sum + Number(project.contractAmount || 0), 0))
+const statisticProjects = computed(() => {
+  const source = selectedProjectIds.value.length
+    ? projects.value.filter(project => project.id && selectedProjectIds.value.includes(project.id))
+    : projects.value
+  const seen = new Set<string>()
+  return source.filter(project => {
+    const name = String(project.name || '').trim()
+    if (seen.has(name)) return false
+    seen.add(name)
+    return true
+  })
+})
+const ledgerStats = computed(() => { const groups = new Map<string, { type: string; count: number; totalAmount: number; contractAmount: number }>(); for (const project of statisticProjects.value) { const type = project.type || '未填写'; const group = groups.get(type) || { type, count: 0, totalAmount: 0, contractAmount: 0 }; group.count += 1; group.totalAmount += Number(project.totalAmount || 0); group.contractAmount += Number(project.contractAmount || 0); groups.set(type, group) } return [...groups.values()].sort((a, b) => b.count - a.count) })
+const ledgerTotalAmount = computed(() => statisticProjects.value.reduce((sum, project) => sum + Number(project.totalAmount || 0), 0))
+const ledgerContractAmount = computed(() => statisticProjects.value.reduce((sum, project) => sum + Number(project.contractAmount || 0), 0))
 const stats = ref<Array<{ province: string; total: number; issues: number }>>([])
 const users = ref<User[]>([])
 const importRows = ref<Project[]>([])
 const importResult = ref<{ created: number; updated: number; errors: Array<{ row: number; message: string }>; done?: boolean } | null>(null)
 const configDraft = reactive<any>({ provinces: '', projectTypes: '', stages: '', healthStatuses: '', problemTags: '', updateCycles: '', nearDays: 3 })
+const directUnitNames = new Set(['中国电科院', '国网经研院', '国网能源院', '国网工研院', '国网信通中心（大数据中心）', '国网特高压公司', '国网直流中心'])
+const provinceOptions = computed(() => dict.value.provinces.filter(x => !directUnitNames.has(x)))
+const directUnitOptions = computed(() => dict.value.provinces.filter(x => directUnitNames.has(x)))
 
 async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(url, { ...options, cache: 'no-store', headers: { 'Content-Type': 'application/json', ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}), ...(options.headers || {}) } })
@@ -79,9 +97,12 @@ async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
   return (body.data ?? body) as T
 }
 async function loadDict() { dict.value = await api<Dict>('/api/dictionaries') }
-async function loadProjects() { loading.value = true; try { const q = new URLSearchParams({ page: '1', pageSize: String(filters.pageSize) }); Object.entries(filters).forEach(([k, v]) => { if (k !== 'page' && k !== 'pageSize' && v) q.set(k, String(v)) }); const data = await api<{ items: Project[]; total: number }>(`/api/projects?${q}`); projects.value = data.items; dict.value.stages = [...new Set([...dict.value.stages, ...data.items.map(item => item.stage).filter(Boolean)])]; total.value = data.total } finally { loading.value = false } }
+function filterParams() { const q = new URLSearchParams({ page: '1', pageSize: String(filters.pageSize) }); Object.entries(filters).forEach(([k, v]) => { if (k === 'page' || k === 'pageSize') return; const value = Array.isArray(v) ? v.join(',') : String(v); if (value) q.set(k, value) }); return q }
+async function loadProjects() { loading.value = true; try { const data = await api<{ items: Project[]; total: number }>(`/api/projects?${filterParams()}`); projects.value = data.items; dict.value.stages = [...new Set([...dict.value.stages, ...data.items.map(item => item.stage).filter(Boolean)])]; total.value = data.total } finally { loading.value = false } }
 function applyFilters() { filters.page = 1; loadProjects() }
-function resetFilters() { Object.assign(filters, { q: '', province: '', stage: '', health: '', type: '', specificType: '', expansionOwner: '', projectYear: '', successDateFrom: '', successDateTo: '', quick: '', sort: '', page: 1 }); selectedProjectIds.value = []; loadProjects() }
+function resetFilters() { Object.assign(filters, { q: '', province: '', stage: [], health: '', type: '', specificType: '', expansionOwner: '', projectYear: '', successDateFrom: '', successDateTo: '', quick: '', sort: '', page: 1 }); selectedProjectIds.value = []; loadProjects() }
+function toggleStage(stage: string) { filters.stage = filters.stage.includes(stage) ? filters.stage.filter(item => item !== stage) : [...filters.stage, stage] }
+function removeStage(stage: string) { filters.stage = filters.stage.filter(item => item !== stage) }
 function toggleProject(id?: string) { if (!id) return; selectedProjectIds.value = selectedProjectIds.value.includes(id) ? selectedProjectIds.value.filter(item => item !== id) : [...selectedProjectIds.value, id] }
 function toggleAllProjects() { const ids = sortedProjects.value.map(project => project.id).filter(Boolean) as string[]; selectedProjectIds.value = ids.every(id => selectedProjectIds.value.includes(id)) ? selectedProjectIds.value.filter(id => !ids.includes(id)) : [...new Set([...selectedProjectIds.value, ...ids])] }
 function setSort(key: typeof sortKey.value) { if (resizingColumn.value) return; if (sortKey.value === key) sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'; else { sortKey.value = key; sortDirection.value = key === 'updatedAt' ? 'desc' : 'asc' } }
@@ -132,7 +153,8 @@ async function saveForm() {
 }
 function submitLogin() { login(loginForm.username.trim(), loginForm.password) }
 async function openProject(id: string) { pushMobileOverlay(); selected.value = await api<Detail>(`/api/projects/${id}`) }
-function status(p: Project) { const next = Date.parse(p.nextUpdateAt || ''); if (!next || next < Date.now()) return '逾期未更新'; if (next - Date.now() < dict.value.nearDays * 86400000) return '临近更新'; return '正常' }
+function reminderEnabled(stage?: string) { return stage === '策划中' || stage === '申报中' }
+function status(p: Project) { if (!reminderEnabled(p.stage)) return '不提醒'; const next = Date.parse(p.nextUpdateAt || ''); if (!next || next < Date.now()) return '逾期未更新'; if (next - Date.now() < dict.value.nearDays * 86400000) return '临近更新'; return '正常' }
 function formatTime(value?: string) { return value ? value.replace('T', ' ').slice(0, 16) : '暂无' }
 function badgeClass(value: string) { return { good: value === '良好', blue: value === '正常', danger: value === '有问题' || value === '逾期未更新', warning: value === '临近更新' } }
 async function changeView(next: 'ledger' | 'panorama' | 'mine' | 'config') { if (next !== 'panorama') disposeMap(); view.value = next; selected.value = null; showForm.value = false; correctionTarget.value = null; showExportColumns.value = false; showLedgerStats.value = false; if (next === 'panorama') { selectedMapProvince.value = ''; await loadStats() } if (next === 'config' && user.value?.role === 'admin') users.value = await api<User[]>('/api/users') }
@@ -178,6 +200,18 @@ function importRowValue(row: Record<string, unknown>, ...headers: string[]) {
   return ''
 }
 function exportColumnWidths(rows: Record<string, unknown>[]) { return Object.keys(rows[0] || {}).map(key => ({ wch: Math.min(32, Math.max(10, Math.max(key.length, ...rows.slice(0, 80).map(row => String(row[key] || '').length)) + 2)) })) }
+function exportProjectType(project: Project) { return project.type?.trim() || '未分类' }
+function compareExportProjects(a: Project, b: Project) {
+  const aType = exportProjectType(a)
+  const bType = exportProjectType(b)
+  const aTypeIndex = exportProjectTypeOrder.indexOf(aType)
+  const bTypeIndex = exportProjectTypeOrder.indexOf(bType)
+  const typeOrder = (aTypeIndex < 0 ? exportProjectTypeOrder.length : aTypeIndex) - (bTypeIndex < 0 ? exportProjectTypeOrder.length : bTypeIndex)
+  if (typeOrder) return typeOrder
+  if (aTypeIndex < 0 && aType !== bType) return aType.localeCompare(bType, 'zh-CN')
+  const yearOrder = String(b.projectYear || '').localeCompare(String(a.projectYear || ''), 'zh-CN', { numeric: true })
+  return yearOrder || String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN')
+}
 function exportDate(value: unknown) {
   if (value == null || value === '') return ''
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -215,7 +249,32 @@ async function chooseImport(event: Event) {
   input.value = ''
 }
 async function confirmImport() { importResult.value = { ...await api('/api/imports/projects', { method: 'POST', body: JSON.stringify({ projects: importRows.value, confirm: true }) }), done: true }; filters.page = 1; await loadProjects() }
-async function exportLedger() { if (!exportColumnKeys.value.length) { error.value = '请至少选择一列'; return }; const q = new URLSearchParams(); Object.entries(filters).forEach(([k, v]) => { if (k !== 'page' && k !== 'pageSize' && v) q.set(k, String(v)) }); const rows = selectedProjectIds.value.length ? projects.value.filter(project => selectedProjectIds.value.includes(project.id || '')) : await api<Project[]>(`/api/exports/projects?${q}`); const output = rows.map(p => { const values: Record<string, unknown> = { province: p.province, name: p.name, type: p.type, specificType: p.specificType, projectYear: p.projectYear, responsibleDepartment: p.responsibleDepartment, expansionOwner: p.expansionOwner, leadParticipatingUnits: p.leadParticipatingUnits, totalAmount: p.totalAmount, contractAmount: p.contractAmount, source: p.source, successDate: exportDate(p.successDate), zhixinRole: p.zhixinRole, internalSupportDepartment: p.internalSupportDepartment, provincialSupportDepartment: p.provincialSupportDepartment, governmentUnit: p.governmentUnit, stage: p.stage, health: p.health, problemTags: (p.problemTags || []).join('、'), progress: p.progress, problemDescription: p.problemDescription, nextPlan: p.nextPlan, updateCycle: p.updateCycle }; return Object.fromEntries(exportColumns.filter(([key]) => exportColumnKeys.value.includes(key)).map(([key, title]) => [title, values[key]])) }); const book = XLSX.utils.book_new(); const sheet = XLSX.utils.json_to_sheet(output); sheet['!cols'] = exportColumnWidths(output); XLSX.utils.book_append_sheet(book, sheet, '项目台账'); XLSX.writeFile(book, `项目台账-${new Date().toISOString().slice(0, 10)}.xlsx`); showExportColumns.value = false }
+async function exportLedger() {
+  if (!exportColumnKeys.value.length) { error.value = '请至少选择一列'; return }
+  const q = new URLSearchParams()
+  Object.entries(filters).forEach(([k, v]) => { if (k !== 'page' && k !== 'pageSize') { const value = Array.isArray(v) ? v.join(',') : String(v); if (value) q.set(k, value) } })
+  const rows = selectedProjectIds.value.length
+    ? projects.value.filter(project => selectedProjectIds.value.includes(project.id || ''))
+    : await api<Project[]>(`/api/exports/projects?${q}`)
+  const selectedColumns = exportColumns.filter(([key]) => exportColumnKeys.value.includes(key))
+  const output: Record<string, unknown>[] = []
+  let previousType = ''
+  for (const p of [...rows].sort(compareExportProjects)) {
+    const type = exportProjectType(p)
+    if (previousType && type !== previousType) output.push({})
+    const values: Record<string, unknown> = { province: p.province, name: p.name, type: p.type, specificType: p.specificType, projectYear: p.projectYear, responsibleDepartment: p.responsibleDepartment, expansionOwner: p.expansionOwner, leadParticipatingUnits: p.leadParticipatingUnits, totalAmount: p.totalAmount, contractAmount: p.contractAmount, source: p.source, successDate: exportDate(p.successDate), zhixinRole: p.zhixinRole, internalSupportDepartment: p.internalSupportDepartment, provincialSupportDepartment: p.provincialSupportDepartment, governmentUnit: p.governmentUnit, stage: p.stage, health: p.health, problemTags: (p.problemTags || []).join('、'), progress: p.progress, problemDescription: p.problemDescription, nextPlan: p.nextPlan, updateCycle: p.updateCycle }
+    output.push(Object.fromEntries(selectedColumns.map(([key, title]) => [title, values[key]])))
+    previousType = type
+  }
+  const headers = selectedColumns.map(([, title]) => title)
+  const sheetRows = output.map(row => headers.map(header => row[header] ?? ''))
+  const book = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([headers, ...sheetRows])
+  sheet['!cols'] = exportColumnWidths(output.filter(row => Object.keys(row).length))
+  XLSX.utils.book_append_sheet(book, sheet, '项目台账')
+  XLSX.writeFile(book, `项目台账-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  showExportColumns.value = false
+}
 async function exportHistory() { if (!selected.value) return; const rows = await api<History[]>(`/api/exports/history?projectId=${selected.value.project.id}`); const output = rows.map(h => ({ 更新时间: formatTime(h.updatedAt), 更新人: h.updatedBy, 项目阶段: h.stage, 健康状态: h.health, 问题标签: (h.problemTags || []).join('、'), 进展: h.progress, 问题说明: h.problemDescription, 下一步计划: h.nextPlan, 备注: h.note, 修正说明: h.correctionNote })); const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(output), '进展历史'); XLSX.writeFile(book, `项目历史-${selected.value.project.name}.xlsx`) }
 const mapElement = ref<HTMLElement | null>(null)
 let mapChart: echarts.ECharts | null = null
@@ -249,7 +308,7 @@ function renderMap() {
 }
 function resizeMap() { mapChart?.resize() }
 function disposeMap() { mapChart?.dispose(); mapChart = null }
-function closeAccountMenu(event: MouseEvent) { if (accountMenu.value && !accountMenu.value.contains(event.target as Node)) showAccountMenu.value = false }
+function closeAccountMenu(event: MouseEvent) { if (accountMenu.value && !accountMenu.value.contains(event.target as Node)) showAccountMenu.value = false; if (stageMenu.value && !stageMenu.value.contains(event.target as Node)) showStageMenu.value = false }
 function handleMobileBack() { if (!window.matchMedia('(max-width: 800px)').matches) return; if (showForm.value) { showForm.value = false; return }; if (selected.value) { selected.value = null; return } }
 onMounted(() => { boot(); window.addEventListener('resize', resizeMap); window.addEventListener('popstate', handleMobileBack); document.addEventListener('click', closeAccountMenu) })
 watch([view, stats], async () => { if (view.value === 'panorama') { await nextTick(); renderMap() } }, { deep: true })
@@ -269,7 +328,7 @@ const selectedProjectRank = computed(() => selectedMapLocation.value?.total ? [.
 function selectMapProvince(province: string) { selectedMapProvince.value = province }
 function openMapLedger() {
   const province = selectedMapLocation.value?.province || ''
-  Object.assign(filters, { q: '', province, stage: '', health: '', type: '', specificType: '', expansionOwner: '', projectYear: '', successDateFrom: '', successDateTo: '', quick: '', sort: '', page: 1 })
+  Object.assign(filters, { q: '', province, stage: [], health: '', type: '', specificType: '', expansionOwner: '', projectYear: '', successDateFrom: '', successDateTo: '', quick: '', sort: '', page: 1 })
   selectedProjectIds.value = []
   showLedgerStats.value = false
   changeView('ledger')
@@ -283,7 +342,7 @@ function openMapLedger() {
     <header class="topbar"><div class="brand"><span class="brand-mark">项</span><div><strong>项目台账</strong><small>项目管理系统</small></div></div><nav><button :class="{ active: view === 'ledger' }" @click="changeView('ledger')">项目台账</button><button :class="{ active: view === 'panorama' }" @click="changeView('panorama')">全国全景</button><button v-if="user.role === 'admin'" :class="{ active: view === 'config' }" @click="changeView('config')">系统配置</button></nav><div ref="accountMenu" class="account account-menu-wrap"><button class="avatar-button" :aria-expanded="showAccountMenu" aria-label="打开账户菜单" @click="showAccountMenu = !showAccountMenu">{{ user.name.slice(0, 1) }}</button><div v-if="showAccountMenu" class="account-menu"><strong>{{ user.name }}</strong><small>{{ user.role === 'admin' ? '管理员' : '普通用户' }}</small><button @click="showAccountMenu = false; changeView('mine')">我的</button><button @click="showAccountMenu = false; openPasswordForm">修改密码</button><button @click="logout">退出</button></div></div></header>
       <main class="main-content" :class="{ 'ledger-content': view === 'ledger' }">
       <div v-if="error" class="toast">{{ error }} <button @click="error = ''">关闭</button></div>
-      <template v-if="view === 'ledger'"><section class="page-heading"><div><h1>项目台账</h1><p>{{ total }} 个项目<span v-if="total"> · 点击项目查看详情</span></p></div><div class="heading-actions"><label class="file-button">导入<input type="file" accept=".xlsx,.xls,.csv" @change="chooseImport" /></label><button @click="openExportColumns">导出</button><button @click="showLedgerStats = !showLedgerStats">数据统计</button><button v-if="user.role === 'admin' || user.role === 'user'" class="primary" @click="openNew">＋ 新增项目</button></div></section><section class="filter-bar"><input class="filter-search" v-model="filters.q" placeholder="搜索项目名称或省份" @keyup.enter="applyFilters" /><select class="province-filter" v-model="filters.province"><option value="">全部省份</option><option v-for="x in dict.provinces" :key="x">{{ x }}</option></select><select class="year-filter" v-model="filters.projectYear"><option value="">全部年份</option><option v-for="year in [...new Set(projects.map(p => p.projectYear))].sort().reverse()" :key="year">{{ year }}</option></select><select class="type-filter" v-model="filters.type"><option value="">全部类型</option><option v-for="x in dict.projectTypes" :key="x">{{ x }}</option></select><select class="owner-filter" v-model="filters.expansionOwner"><option value="">全部负责人</option><option v-for="owner in ownerOptions" :key="owner">{{ owner }}</option></select><select class="stage-filter" v-model="filters.stage"><option value="">全部阶段</option><option v-for="x in dict.stages" :key="x">{{ x }}</option></select><select class="health-filter" v-model="filters.health"><option value="">全部健康状态</option><option v-for="x in dict.healthStatuses" :key="x">{{ x }}</option></select><div class="success-date-filter"><span>申报成功时间</span><input v-model="filters.successDateFrom" type="date" aria-label="申报成功时间起" /><i>至</i><input v-model="filters.successDateTo" type="date" aria-label="申报成功时间止" /></div><button class="filter-submit" @click="applyFilters">筛选</button><button class="reset-button" @click="resetFilters">重置</button></section><section v-if="showLedgerStats" class="ledger-stats"><div class="stats-summary"><strong>{{ projects.length }}</strong><span>当前筛选项目</span><strong>{{ ledgerTotalAmount.toFixed(2) }}</strong><span>项目总金额（万元）</span><strong>{{ ledgerContractAmount.toFixed(2) }}</strong><span>智芯合同金额（万元）</span></div><table><thead><tr><th>项目类型</th><th>项目数</th><th>项目总金额（万元）</th><th>智芯合同金额（万元）</th></tr></thead><tbody><tr v-for="item in ledgerStats" :key="item.type"><td>{{ item.type }}</td><td>{{ item.count }}</td><td>{{ item.totalAmount.toFixed(2) }}</td><td>{{ item.contractAmount.toFixed(2) }}</td></tr><tr v-if="!ledgerStats.length"><td colspan="4">当前筛选结果暂无数据</td></tr></tbody></table></section><div v-if="loading" class="loading">正在加载项目...</div><div class="table-card"><table><colgroup><col class="col-province" /><col class="col-name" /><col class="col-year" /><col class="col-type" /><col class="col-stage" /><col class="col-health" /><col class="col-progress" /><col class="col-owner" /><col class="col-status" /><col class="col-updated" /></colgroup><thead><tr><th>省份</th><th>项目名称</th><th>年份</th><th>项目类型</th><th>阶段</th><th>健康</th><th>最新进展</th><th>负责人</th><th>更新状态</th><th>最近更新时间</th></tr></thead><tbody class="desktop-projects"><tr v-for="p in projects" :key="p.id" @click="openProject(p.id!)"><td class="sticky-province">{{ p.province }}</td><td class="sticky-name"><strong>{{ p.name }}</strong></td><td>{{ p.projectYear }}</td><td>{{ p.type || '未填写' }}</td><td><span class="badge neutral">{{ p.stage }}</span></td><td><span class="badge" :class="badgeClass(p.health)">{{ p.health }}</span></td><td class="progress-cell">{{ p.progress || '暂无进展' }}</td><td>{{ p.expansionOwner || '未填写' }}</td><td><span class="badge" :class="badgeClass(status(p))">{{ status(p) }}</span></td><td>{{ formatTime(p.updatedAt) }}<small>{{ p.updatedBy || '暂无' }}</small></td></tr></tbody><tbody class="mobile-projects"><tr v-for="p in projects" :key="p.id" @click="openProject(p.id!)"><td><strong>{{ p.name }}</strong><small>{{ p.province }} · {{ p.projectYear }} · {{ p.type || '未填写' }}</small><p>{{ p.progress || '暂无进展' }}</p><span class="badge neutral">{{ p.stage }}</span> <span class="badge" :class="badgeClass(p.health)">{{ p.health }}</span> <span class="badge" :class="badgeClass(status(p))">{{ status(p) }}</span><small>负责人 {{ p.expansionOwner || '未填写' }} · 更新于 {{ formatTime(p.updatedAt) }}</small></td></tr></tbody><tbody v-if="!projects.length"><tr><td colspan="10" class="empty">暂无项目数据</td></tr></tbody></table></div></template>
+      <template v-if="view === 'ledger'"><section class="page-heading"><div><h1>项目台账</h1><p>{{ total }} 个项目<span v-if="total"> · 点击项目查看详情</span></p></div><div class="heading-actions"><label class="file-button">导入<input type="file" accept=".xlsx,.xls,.csv" @change="chooseImport" /></label><button @click="openExportColumns">导出</button><button @click="showLedgerStats = !showLedgerStats">数据统计</button><button v-if="user.role === 'admin' || user.role === 'user'" class="primary" @click="openNew">＋ 新增项目</button></div></section><section class="filter-bar"><input class="filter-search" v-model="filters.q" placeholder="搜索项目名称或省份" @keyup.enter="applyFilters" /><select class="province-filter" v-model="filters.province"><option value="">全部</option><option value="__all_provinces__">全部省份</option><option value="__all_direct_units__">全部直属单位</option><optgroup label="省份"><option v-for="x in provinceOptions" :key="x">{{ x }}</option></optgroup><optgroup label="直属单位"><option v-for="x in directUnitOptions" :key="x">{{ x }}</option></optgroup></select><select class="year-filter" v-model="filters.projectYear"><option value="">全部年份</option><option v-for="year in [...new Set(projects.map(p => p.projectYear))].sort().reverse()" :key="year">{{ year }}</option></select><select class="type-filter" v-model="filters.type"><option value="">全部类型</option><option v-for="x in dict.projectTypes" :key="x">{{ x }}</option></select><select class="owner-filter" v-model="filters.expansionOwner"><option value="">全部负责人</option><option v-for="owner in ownerOptions" :key="owner">{{ owner }}</option></select><div ref="stageMenu" class="stage-filter stage-picker"><button type="button" class="stage-picker-trigger" @click="showStageMenu = !showStageMenu"><span v-if="!filters.stage.length" class="stage-placeholder">全部阶段</span><span v-for="(stage, index) in filters.stage" v-show="index < 3" :key="stage" class="stage-tag">{{ stage }}<i @click.stop="removeStage(stage)">×</i></span><span v-if="filters.stage.length > 3" class="stage-more">+{{ filters.stage.length - 3 }}</span><b>⌄</b></button><div v-if="showStageMenu" class="stage-picker-menu"><div v-for="x in dict.stages" :key="x" class="stage-option"><input type="checkbox" :checked="filters.stage.includes(x)" @change="toggleStage(x)" /><span>{{ x }}</span></div></div></div><select class="health-filter" v-model="filters.health"><option value="">全部健康状态</option><option v-for="x in dict.healthStatuses" :key="x">{{ x }}</option></select><div class="success-date-filter"><span>申报成功时间</span><input v-model="filters.successDateFrom" type="date" aria-label="申报成功时间起" /><i>至</i><input v-model="filters.successDateTo" type="date" aria-label="申报成功时间止" /></div><button class="filter-submit" @click="applyFilters">筛选</button><button class="reset-button" @click="resetFilters">重置</button></section><section v-if="showLedgerStats" class="ledger-stats"><div class="stats-summary"><strong>{{ statisticProjects.length }}</strong><span>{{ selectedProjectIds.length ? '已选项目' : '当前筛选项目' }}</span><strong>{{ ledgerTotalAmount.toFixed(2) }}</strong><span>项目总金额（万元）</span><strong>{{ ledgerContractAmount.toFixed(2) }}</strong><span>智芯合同金额（万元）</span></div><table><thead><tr><th>项目类型</th><th>项目数</th><th>项目总金额（万元）</th><th>智芯合同金额（万元）</th></tr></thead><tbody><tr v-for="item in ledgerStats" :key="item.type"><td>{{ item.type }}</td><td>{{ item.count }}</td><td>{{ item.totalAmount.toFixed(2) }}</td><td>{{ item.contractAmount.toFixed(2) }}</td></tr><tr v-if="!ledgerStats.length"><td colspan="4">当前筛选结果暂无数据</td></tr></tbody></table></section><div v-if="loading" class="loading">正在加载项目...</div><div class="table-card"><table><colgroup><col class="col-province" /><col class="col-name" /><col class="col-year" /><col class="col-type" /><col class="col-stage" /><col class="col-health" /><col class="col-progress" /><col class="col-owner" /><col class="col-status" /><col class="col-updated" /></colgroup><thead><tr><th>省份</th><th>项目名称</th><th>年份</th><th>项目类型</th><th>阶段</th><th>健康</th><th>最新进展</th><th>负责人</th><th>更新状态</th><th>最近更新时间</th></tr></thead><tbody class="desktop-projects"><tr v-for="p in projects" :key="p.id" @click="openProject(p.id!)"><td class="sticky-province">{{ p.province }}</td><td class="sticky-name"><strong>{{ p.name }}</strong></td><td>{{ p.projectYear }}</td><td>{{ p.type || '未填写' }}</td><td><span class="badge neutral">{{ p.stage }}</span></td><td><span class="badge" :class="badgeClass(p.health)">{{ p.health }}</span></td><td class="progress-cell">{{ p.progress || '暂无进展' }}</td><td>{{ p.expansionOwner || '未填写' }}</td><td><span class="badge" :class="badgeClass(status(p))">{{ status(p) }}</span></td><td>{{ formatTime(p.updatedAt) }}<small>{{ p.updatedBy || '暂无' }}</small></td></tr></tbody><tbody class="mobile-projects"><tr v-for="p in projects" :key="p.id" @click="openProject(p.id!)"><td><strong>{{ p.name }}</strong><small>{{ p.province }} · {{ p.projectYear }} · {{ p.type || '未填写' }}</small><p>{{ p.progress || '暂无进展' }}</p><span class="badge neutral">{{ p.stage }}</span> <span class="badge" :class="badgeClass(p.health)">{{ p.health }}</span> <span class="badge" :class="badgeClass(status(p))">{{ status(p) }}</span><small>负责人 {{ p.expansionOwner || '未填写' }} · 更新于 {{ formatTime(p.updatedAt) }}</small></td></tr></tbody><tbody v-if="!projects.length"><tr><td colspan="10" class="empty">暂无项目数据</td></tr></tbody></table></div></template>
       <section v-if="view === 'ledger'" class="ledger-v2"><div class="table-card ledger-table-scroll"><table><colgroup><col v-for="key in Object.keys(columnWidths)" :key="key" :style="{ width: `${columnWidths[key]}px` }" /></colgroup><thead><tr><th v-for="item in [{ key: 'selected', label: '选择' }, { key: 'province', label: '省份' }, { key: 'name', label: '项目名称' }, { key: 'projectYear', label: '年份' }, { key: 'type', label: '项目类型' }, { key: 'specificType', label: '具体类型' }, { key: 'stage', label: '阶段' }, { key: 'health', label: '健康' }, { key: 'progress', label: '最新进展' }, { key: 'expansionOwner', label: '负责人' }, { key: 'status', label: '更新状态' }, { key: 'updatedAt', label: '最近更新时间' }]" :key="item.key" :class="[`sort-${item.key}`, { 'is-sorted': sortKey === item.key }]" @click="item.key !== 'selected' && setSort(item.key as typeof sortKey)"><input v-if="item.key === 'selected'" type="checkbox" :checked="sortedProjects.length > 0 && sortedProjects.every(project => selectedProjectIds.includes(project.id || ''))" @click.stop="toggleAllProjects" /><span v-else>{{ item.label }}<b v-if="sortKey === item.key">{{ sortDirection === 'asc' ? ' ↑' : ' ↓' }}</b></span><i class="resize-handle" @pointerdown.stop.prevent="startResize($event, item.key)"></i></th></tr></thead><tbody><tr v-for="p in sortedProjects" :key="p.id" @click="openProject(p.id!)"><td class="select-cell"><input type="checkbox" :checked="selectedProjectIds.includes(p.id || '')" @click.stop="toggleProject(p.id)" /></td><td class="sticky-province">{{ p.province }}</td><td class="sticky-name"><strong>{{ p.name }}</strong></td><td>{{ p.projectYear }}</td><td>{{ p.type || '未填写' }}</td><td>{{ p.specificType || '未填写' }}</td><td><span class="badge neutral">{{ p.stage }}</span></td><td><span class="badge" :class="badgeClass(p.health)">{{ p.health }}</span></td><td class="progress-cell">{{ p.progress || '暂无进展' }}</td><td>{{ p.expansionOwner || '未填写' }}</td><td><span class="badge" :class="badgeClass(status(p))">{{ status(p) }}</span></td><td>{{ formatTime(p.updatedAt) }}<small>{{ p.updatedBy || '暂无' }}</small></td></tr><tr v-if="!sortedProjects.length"><td colspan="12" class="empty">暂无项目数据</td></tr></tbody></table></div></section>
       <section v-if="view === 'ledger'" class="mobile-ledger-list">
         <article v-for="p in sortedProjects" :key="p.id" class="project-card" @click="openProject(p.id!)">

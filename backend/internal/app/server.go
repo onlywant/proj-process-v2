@@ -98,7 +98,8 @@ type projectInput struct {
 	Note string `json:"note"`
 }
 
-var provinces = []string{"北京", "天津", "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江", "上海", "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南", "湖北", "湖南", "广东", "广西", "海南", "重庆", "四川", "贵州", "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆", "香港", "澳门", "台湾"}
+var provinces = []string{"北京", "天津", "河北", "冀北", "山西", "蒙东", "辽宁", "吉林", "黑龙江", "上海", "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南", "湖北", "湖南", "广东", "广西", "海南", "重庆", "四川", "贵州", "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆", "香港", "澳门", "台湾", "中国电科院", "国网经研院", "国网能源院", "国网工研院", "国网信通中心（大数据中心）", "国网特高压公司", "国网直流中心"}
+var directUnits = []string{"中国电科院", "国网经研院", "国网能源院", "国网工研院", "国网信通中心（大数据中心）", "国网特高压公司", "国网直流中心"}
 
 func New(path, frontend string) (*Server, error) {
 	if absolute, e := filepath.Abs(path); e == nil {
@@ -330,6 +331,15 @@ func (s *Server) dict(w http.ResponseWriter, r *http.Request) {
 	s.db.QueryRow("SELECT payload FROM config WHERE id=1").Scan(&raw)
 	var d Dictionary
 	json.Unmarshal([]byte(raw), &d)
+	known := map[string]bool{}
+	for _, p := range d.Provinces {
+		known[p] = true
+	}
+	for _, p := range provinces {
+		if !known[p] {
+			d.Provinces = append(d.Provinces, p)
+		}
+	}
 	jsonOut(w, 200, d)
 }
 
@@ -483,6 +493,18 @@ func normalize(p *Project) {
 	}
 	if p.UpdatedAt == "" {
 		p.UpdatedAt = time.Now().Format(time.RFC3339)
+	}
+	setNextUpdateAt(p)
+}
+
+func reminderEnabled(stage string) bool {
+	return stage == "策划中" || stage == "申报中"
+}
+
+func setNextUpdateAt(p *Project) {
+	if !reminderEnabled(p.Stage) {
+		p.NextUpdateAt = ""
+		return
 	}
 	p.NextUpdateAt = nextDate(p.UpdatedAt, p.UpdateCycle, p.CustomCycleDays)
 }
@@ -653,6 +675,35 @@ func (s *Server) get(id string) (Project, error) {
 	}
 	return p, e
 }
+
+func appendFilter(where *[]string, args *[]any, column, raw string) {
+	values := make([]string, 0)
+	for _, value := range strings.Split(raw, ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			if column == "province" && value == "__all_provinces__" {
+				for _, province := range provinces { if !contains(directUnits, province) { values = append(values, province) } }
+				continue
+			}
+			if column == "province" && value == "__all_direct_units__" { values = append(values, directUnits...); continue }
+			values = append(values, value)
+		}
+	}
+	if len(values) == 0 {
+		return
+	}
+	if len(values) == 1 {
+		*where = append(*where, column+"=?")
+		*args = append(*args, values[0])
+		return
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(values)), ",")
+	*where = append(*where, column+" IN ("+placeholders+")")
+	for _, value := range values {
+		*args = append(*args, value)
+	}
+}
+
+func contains(items []string, target string) bool { for _, item := range items { if item == target { return true } }; return false }
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.auth(r); !ok {
 		fail(w, 401, "请先登录")
@@ -663,8 +714,7 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	args := []any{}
 	for _, f := range []struct{ k, c string }{{"province", "province"}, {"stage", "json_extract(payload,'$.stage')"}, {"health", "json_extract(payload,'$.health')"}, {"type", "json_extract(payload,'$.type')"}, {"specificType", "json_extract(payload,'$.specificType')"}, {"expansionOwner", "json_extract(payload,'$.expansionOwner')"}, {"projectYear", "project_year"}} {
 		if v := q.Get(f.k); v != "" {
-			where = append(where, f.c+"=?")
-			args = append(args, v)
+			appendFilter(&where, &args, f.c, v)
 		}
 	}
 	if v := strings.TrimSpace(q.Get("q")); v != "" {
@@ -685,10 +735,10 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 		case "problem":
 			where = append(where, "json_extract(payload,'$.health')='有问题'")
 		case "overdue":
-			where = append(where, "next_update_at < ?")
+			where = append(where, "json_extract(payload,'$.stage') IN ('策划中','申报中') AND next_update_at < ?")
 			args = append(args, time.Now().Format(time.RFC3339))
 		case "soon":
-			where = append(where, "next_update_at >= ? AND next_update_at < ?")
+			where = append(where, "json_extract(payload,'$.stage') IN ('策划中','申报中') AND next_update_at >= ? AND next_update_at < ?")
 			args = append(args, time.Now().Format(time.RFC3339), time.Now().AddDate(0, 0, nearDays).Format(time.RFC3339))
 		case "good", "normal":
 			where = append(where, "json_extract(payload,'$.health')=?")
@@ -871,7 +921,7 @@ func (s *Server) progress(w http.ResponseWriter, r *http.Request) {
 	p.UpdateCycle = in.UpdateCycle
 	p.CustomCycleDays = in.CustomCycleDays
 	p.UpdatedAt = time.Now().Format(time.RFC3339)
-	p.NextUpdateAt = nextDate(p.UpdatedAt, p.UpdateCycle, p.CustomCycleDays)
+	setNextUpdateAt(&p)
 	p.UpdatedBy = u.Name
 	p.Version = old.Version + 1
 	if e = valid(p); e != nil {
@@ -1011,8 +1061,7 @@ func (s *Server) exportProjects(w http.ResponseWriter, r *http.Request) {
 	args := []any{}
 	for _, f := range []struct{ k, c string }{{"province", "province"}, {"stage", "json_extract(payload,'$.stage')"}, {"health", "json_extract(payload,'$.health')"}, {"type", "json_extract(payload,'$.type')"}, {"specificType", "json_extract(payload,'$.specificType')"}, {"expansionOwner", "json_extract(payload,'$.expansionOwner')"}, {"projectYear", "project_year"}} {
 		if v := q.Get(f.k); v != "" {
-			where = append(where, f.c+"=?")
-			args = append(args, v)
+			appendFilter(&where, &args, f.c, v)
 		}
 	}
 	if v := strings.TrimSpace(q.Get("q")); v != "" {
@@ -1028,10 +1077,10 @@ func (s *Server) exportProjects(w http.ResponseWriter, r *http.Request) {
 		args = append(args, v)
 	}
 	if quick := q.Get("quick"); quick == "overdue" {
-		where = append(where, "next_update_at < ?")
+		where = append(where, "json_extract(payload,'$.stage') IN ('策划中','申报中') AND next_update_at < ?")
 		args = append(args, time.Now().Format(time.RFC3339))
 	} else if quick == "soon" {
-		where = append(where, "next_update_at >= ? AND next_update_at < ?")
+		where = append(where, "json_extract(payload,'$.stage') IN ('策划中','申报中') AND next_update_at >= ? AND next_update_at < ?")
 		args = append(args, time.Now().Format(time.RFC3339), time.Now().AddDate(0, 0, s.nearDays()).Format(time.RFC3339))
 	} else if quick == "problem" || quick == "good" || quick == "normal" {
 		health := map[string]string{"problem": "有问题", "good": "良好", "normal": "正常"}[quick]
@@ -1138,7 +1187,7 @@ func (s *Server) importProjects(w http.ResponseWriter, r *http.Request) {
 		}
 		p.UpdatedAt = time.Now().Format(time.RFC3339)
 		p.UpdatedBy = u.Name
-		p.NextUpdateAt = nextDate(p.UpdatedAt, p.UpdateCycle, p.CustomCycleDays)
+		setNextUpdateAt(&p)
 		b, _ := json.Marshal(p)
 		if existingID == "" {
 			p.ID = "p-" + token()[:12]

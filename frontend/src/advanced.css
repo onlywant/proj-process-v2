@@ -20,6 +20,7 @@
 }
 
 @media(max-width:800px){
-  .ledger-content .filter-bar .filter-search,.ledger-content .filter-bar .year-filter,.ledger-content .filter-bar .type-filter,.ledger-content .filter-bar .stage-filter,.ledger-content .filter-bar .health-filter,.ledger-content .filter-bar .success-date-filter{display:none!important}
+  .ledger-content .filter-bar .filter-search,.ledger-content .filter-bar .year-filter,.ledger-content .filter-bar .type-filter,.ledger-content .filter-bar .health-filter,.ledger-content .filter-bar .success-date-filter{display:none!important}
+  .ledger-content .filter-bar .stage-picker{display:block!important;width:100%;min-width:0}
   .ledger-content .filter-bar .province-filter,.ledger-content .filter-bar .owner-filter,.ledger-content .filter-bar .filter-submit,.ledger-content .filter-bar .reset-button{display:block!important;width:100%;min-width:0}
 }

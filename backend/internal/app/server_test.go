@@ -6,7 +6,42 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+func TestUpdateReminderOnlyForPlanningAndApplying(t *testing.T) {
+	s, err := New(t.TempDir()+"/app.db", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := loginToken(t, s, "admin", "admin123")
+	past := time.Now().AddDate(0, 0, -30).Format(time.RFC3339)
+	var planning, completed Project
+	w := call(t, s, http.MethodPost, "/api/projects", admin, Project{Province: "江苏", Name: "提醒项目", ProjectYear: "2026", Stage: "策划中", Health: "正常", UpdateCycle: "每周", UpdatedAt: past})
+	if w.Code != 201 {
+		t.Fatalf("planning create=%d %s", w.Code, w.Body)
+	}
+	envelope(t, w, &planning)
+	if planning.NextUpdateAt == "" {
+		t.Fatal("planning project should have next update time")
+	}
+	w = call(t, s, http.MethodPost, "/api/projects", admin, Project{Province: "江苏", Name: "无需提醒项目", ProjectYear: "2026", Stage: "已立项", Health: "正常", UpdateCycle: "每周", UpdatedAt: past})
+	if w.Code != 201 {
+		t.Fatalf("completed create=%d %s", w.Code, w.Body)
+	}
+	envelope(t, w, &completed)
+	if completed.NextUpdateAt != "" {
+		t.Fatalf("completed project should not have next update time: %q", completed.NextUpdateAt)
+	}
+	var listed struct {
+		Items []Project `json:"items"`
+	}
+	w = call(t, s, http.MethodGet, "/api/projects?page=1&pageSize=20&quick=overdue", admin, nil)
+	envelope(t, w, &listed)
+	if len(listed.Items) != 1 || listed.Items[0].ID != planning.ID {
+		t.Fatalf("overdue filter returned wrong projects: %+v", listed.Items)
+	}
+}
 
 func call(t *testing.T, s *Server, method, path, bearer string, value any) *httptest.ResponseRecorder {
 	t.Helper()
