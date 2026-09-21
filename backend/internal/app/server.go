@@ -155,17 +155,6 @@ CREATE TABLE IF NOT EXISTS import_batches(id TEXT PRIMARY KEY,operator TEXT NOT 
 		var exists int
 		s.db.QueryRow("SELECT COUNT(*) FROM users WHERE username=?", u.id).Scan(&exists)
 		if exists > 0 {
-			// Keep the documented built-in administrator credentials available for
-			// local deployments after a database has been reused.
-			if u.id == "admin" {
-				h, hashErr := hash(u.p)
-				if hashErr != nil {
-					return hashErr
-				}
-				if _, err = s.db.Exec("UPDATE users SET password=?,status='启用' WHERE username='admin'", h); err != nil {
-					return err
-				}
-			}
 			continue
 		}
 		h, hashErr := hash(u.p)
@@ -278,7 +267,7 @@ func (s *Server) auth(r *http.Request, roles ...string) (User, bool) {
 		return User{}, false
 	}
 	var status string
-	if s.db.QueryRow("SELECT status FROM users WHERE id=?", u.ID).Scan(&status) != nil || status != "启用" {
+	if s.db.QueryRow("SELECT status,role,name FROM users WHERE id=?", u.ID).Scan(&status, &u.Role, &u.Name) != nil || status != "启用" {
 		return User{}, false
 	}
 	if len(roles) == 0 {
@@ -320,8 +309,21 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "密码保存失败")
 		return
 	}
+	s.revokeSessions(u.ID, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	jsonOut(w, 200, map[string]string{"status": "saved"})
 }
+
+// Keep the session performing a self-service change; revoke all other sessions.
+func (s *Server) revokeSessions(userID, keep string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, user := range s.sessions {
+		if user.ID == userID && key != keep {
+			delete(s.sessions, key)
+		}
+	}
+}
+
 func (s *Server) dict(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.auth(r); !ok {
 		fail(w, 401, "请先登录")
@@ -456,9 +458,7 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "状态无效")
 		return
 	}
-	if in.ID == "" {
-		in.ID = r.PathValue("id")
-	}
+	in.ID = r.PathValue("id")
 	if in.ID == "u-admin" && in.Status == "停用" {
 		fail(w, 400, "不能停用唯一管理员")
 		return
@@ -469,12 +469,20 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "密码至少需要8位")
 			return
 		}
-		password, _ = hash(in.Password)
+		var err error
+		password, err = hash(in.Password)
+		if err != nil {
+			fail(w, 500, "密码处理失败")
+			return
+		}
 	}
 	_, err := s.db.Exec("UPDATE users SET name=COALESCE(NULLIF(?,''),name),role=COALESCE(NULLIF(?,''),role),status=COALESCE(NULLIF(?,''),status),password=COALESCE(NULLIF(?,''),password) WHERE id=?", in.Name, in.Role, in.Status, password, r.PathValue("id"))
 	if err != nil {
 		fail(w, 500, "用户保存失败")
 		return
+	}
+	if in.Password != "" || in.Status == "停用" || in.Role != "" {
+		s.revokeSessions(in.ID, "")
 	}
 	jsonOut(w, 200, map[string]string{"status": "saved"})
 }
@@ -681,10 +689,17 @@ func appendFilter(where *[]string, args *[]any, column, raw string) {
 	for _, value := range strings.Split(raw, ",") {
 		if value = strings.TrimSpace(value); value != "" {
 			if column == "province" && value == "__all_provinces__" {
-				for _, province := range provinces { if !contains(directUnits, province) { values = append(values, province) } }
+				for _, province := range provinces {
+					if !contains(directUnits, province) {
+						values = append(values, province)
+					}
+				}
 				continue
 			}
-			if column == "province" && value == "__all_direct_units__" { values = append(values, directUnits...); continue }
+			if column == "province" && value == "__all_direct_units__" {
+				values = append(values, directUnits...)
+				continue
+			}
 			values = append(values, value)
 		}
 	}
@@ -703,7 +718,14 @@ func appendFilter(where *[]string, args *[]any, column, raw string) {
 	}
 }
 
-func contains(items []string, target string) bool { for _, item := range items { if item == target { return true } }; return false }
+func contains(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.auth(r); !ok {
 		fail(w, 401, "请先登录")

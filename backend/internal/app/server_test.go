@@ -283,3 +283,45 @@ func TestAdminCanDeleteSingleProjectOnly(t *testing.T) {
 		t.Fatalf("repeat delete=%d", w.Code)
 	}
 }
+
+func TestAdminPasswordSurvivesRestart(t *testing.T) {
+	path := t.TempDir() + "/app.db"
+	s, err := New(path, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := loginToken(t, s, "admin", "admin123")
+	other := loginToken(t, s, "admin", "admin123")
+	if w := call(t, s, http.MethodPut, "/api/me/password", admin, map[string]string{"currentPassword": "wrong", "newPassword": "changed-admin-password"}); w.Code != 400 {
+		t.Fatalf("wrong current password: %d", w.Code)
+	}
+	if w := call(t, s, http.MethodPut, "/api/me/password", admin, map[string]string{"currentPassword": "admin123", "newPassword": "changed-admin-password"}); w.Code != 200 {
+		t.Fatalf("change: %d %s", w.Code, w.Body)
+	}
+	if w := call(t, s, http.MethodGet, "/api/dictionaries", other, nil); w.Code != 401 {
+		t.Fatalf("other session still active: %d", w.Code)
+	}
+	if w := call(t, s, http.MethodGet, "/api/dictionaries", admin, nil); w.Code != 200 {
+		t.Fatalf("current session lost: %d", w.Code)
+	}
+	if err := s.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = New(path, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.db.Close()
+	if w := call(t, s, http.MethodPost, "/api/login", "", map[string]string{"username": "admin", "password": "admin123"}); w.Code != 401 {
+		t.Fatalf("default password restored: %d", w.Code)
+	}
+	admin = loginToken(t, s, "admin", "changed-admin-password")
+	ordinary := loginToken(t, s, "tianyu", "tianyu")
+	if w := call(t, s, http.MethodPut, "/api/users/u-tianyu", admin, map[string]string{"password": "changed-user-password"}); w.Code != 200 {
+		t.Fatalf("reset: %d", w.Code)
+	}
+	if w := call(t, s, http.MethodGet, "/api/dictionaries", ordinary, nil); w.Code != 401 {
+		t.Fatalf("reset session still active: %d", w.Code)
+	}
+	loginToken(t, s, "tianyu", "changed-user-password")
+}

@@ -104,25 +104,59 @@
   .map-summary>.map-link{white-space:normal!important;overflow-wrap:anywhere!important}
 }
 
-/* Responsive overflow policy: let the page grow before introducing a nested
-   scrollbar. Wide screens keep the summary beside the map; narrower screens
-   switch to a flow layout so every field remains reachable. */
-.map-overlay{overflow:auto!important}
-.map-scene{overflow:visible!important}
-.map-summary{height:auto!important;overflow:visible!important}
-.map-surface.real-map{overflow:hidden!important}
+/* Size rows by their content; scroll the dashboard when the viewport is short. */
+.map-overlay{
+  display:grid;
+  grid-template-rows:auto auto minmax(380px,1fr) auto;
+  align-content:start;
+  height:auto!important;
+  min-height:0!important;
+  overflow:auto!important;
+}
+.panorama-topbar{height:auto;min-height:44px;gap:16px}
+.panorama-kpis{flex:none;min-width:0}
+.panorama-kpi{min-width:0;overflow-wrap:anywhere}
+.map-scene{
+  min-height:380px!important;
+  overflow:visible!important;
+  align-items:stretch!important;
+}
+.map-scene>.map-surface.real-map{height:100%!important;min-height:380px!important}
+.map-scene>.map-summary{
+  height:auto!important;
+  min-width:0;
+  overflow:visible!important;
+  margin-top:0;
+}
+.province-summary-head>div{min-width:0;flex:1}
+.province-summary-head h2{max-width:none;white-space:normal;overflow-wrap:anywhere}
+.summary-state{flex-shrink:0}
+.province-total{flex-wrap:wrap;min-width:0}
+.province-total strong,.province-total em{overflow-wrap:anywhere;max-width:100%}
+.province-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.metric b,.metric span,.metric small{white-space:normal;overflow-wrap:anywhere}
+.summary-hint{overflow-wrap:anywhere}
+.panorama-bottom{grid-template-columns:repeat(2,minmax(0,1fr));flex:none}
+.ranking-panel{min-width:0}
+.ranking-row{grid-template-columns:24px minmax(0,1fr) minmax(40px,1fr) minmax(42px,auto);padding:5px 0}
+.ranking-row>span,.ranking-row>strong{min-width:0;overflow-wrap:anywhere}
+.issue-ranking .ranking-row{grid-template-columns:minmax(0,1fr) minmax(40px,1fr) minmax(42px,auto)}
 
 @media (min-width:801px) and (max-width:1100px){
-  .map-overlay{height:auto!important;min-height:calc(100vh - 72px)!important}
-  .map-scene{display:flex!important;flex-direction:column!important;flex:none!important;gap:12px!important}
-  .map-surface.real-map{width:100%!important;height:min(58vh,560px)!important;min-height:360px!important;flex:none!important}
-  .map-scene > .map-summary{width:100%!important;height:auto!important;min-height:0!important;flex:none!important}
-  .panorama-bottom{flex:none!important}
+  .map-overlay{display:block;padding:18px 24px!important}
+  .map-scene{display:flex!important;flex-direction:column;flex:none!important}
+  .map-scene>.map-summary{flex:none!important}
+  .map-scene>.map-surface.real-map{height:clamp(380px,50vh,560px)!important;flex:none!important}
 }
 
 @media(max-width:800px){
-  .map-overlay{height:auto!important;min-height:calc(100vh - 60px)!important;overflow:auto!important}
-  .map-scene{height:auto!important;overflow:visible!important}
-  .map-scene > .map-summary{height:auto!important;min-height:0!important;overflow:visible!important;flex:none!important}
-  .map-surface.real-map{overflow:hidden!important}
+  .map-overlay{
+    display:flex;
+    height:auto!important;
+    min-height:0!important;
+    overflow:auto!important;
+  }
+  .map-scene{flex:none!important;min-height:0!important;overflow:visible!important}
+  .map-scene>.map-summary{height:auto!important;min-height:0!important;flex:none!important}
+  .map-scene>.map-surface.real-map{height:50svh!important;min-height:280px!important;flex:none!important}
 }
